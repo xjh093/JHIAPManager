@@ -88,3 +88,10 @@
 ///完成购买
 - (void)jh_finishTransaction:(SKPaymentTransaction *)transaction;
 @end
+ 
+ 
+ @interface JHIAPManager (jailBreak)
+/// iPhone is jailBreak?
+- (BOOL)jh_isJailBreak;
+@end
+ 
