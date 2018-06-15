@@ -5,29 +5,10 @@
 //  Created by HaoCold on 2017/9/15.
 //  Copyright © 2017年 HaoCold. All rights reserved.
 //
-//  MIT License
-//
-//  Copyright (c) 2017 xjh093
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in all
-//  copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-//  SOFTWARE.
 
 #import "JHIAPManager.h"
+#import <dlfcn.h>
+#import <sys/stat.h>
 
 #if DEBUG
 #define JHIAPLog(...) NSLog(@"JHIAPLog: %@", [NSString stringWithFormat:__VA_ARGS__]);
@@ -39,6 +20,7 @@ NSString *const JHIAPManagerErrorDomain = @"com.haocold.jhiapmanager";
 NSInteger const JHIAPManagerErrorCodeParameterIsNil = -1;
 NSInteger const JHIAPManagerErrorCodeCanNotMakePayments = -2;
 NSInteger const JHIAPManagerErrorCodeCanNotGetTheRequestProduct = -3;
+NSInteger const JHIAPmanagerErrorCodeIsJailBreak = -4;
 
 typedef void(^jhPaySuccessBlock)(SKPaymentTransaction *transaction);
 typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *error);
@@ -94,6 +76,12 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
     
     if (![SKPaymentQueue canMakePayments]) {
         NSError *error = [NSError errorWithDomain:JHIAPManagerErrorDomain code:JHIAPManagerErrorCodeCanNotMakePayments userInfo:@{NSLocalizedDescriptionKey:@"this device is not able or allowed to make payments"}];
+        failure(nil,error);
+        return;
+    }
+    
+    if ([self jh_isJailBreak]) {
+        NSError *error = [NSError errorWithDomain:JHIAPManagerErrorDomain code:JHIAPmanagerErrorCodeIsJailBreak userInfo:@{NSLocalizedDescriptionKey:@"this device is jailBreak, it's unsafe to make payments"}];
         failure(nil,error);
         return;
     }
@@ -195,4 +183,101 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
 }
 
 @end
+
+
+@implementation JHIAPManager (jailBreak)
+
+- (BOOL)jh_isJailBreak{
+    if ([self isJailBreakForFilePath]) {
+        return YES;
+    }
+    if ([self isJailBreakForOpenCydia]) {
+        return YES;
+    }
+    if ([self isJailBreakForAllApplicationsName]) {
+        return YES;
+    }
+    if ([self isJailBreakForStat]) {
+        return YES;
+    }
+    if ([self isJailBreakForENV]) {
+        return YES;
+    }
+    return NO;
+}
+
+#pragma mark - Pravite
+
+- (BOOL)isJailBreakForFilePath {
+
+    // 通过越狱后增加的越狱文件判断
+    NSArray *pathArray = @[@"/Applications/Cydia.app",
+                           @"/Library/MobileSubstrate/MobileSubstrate.dylib",
+                           @"/bin/bash",
+                           @"/usr/sbin/sshd",
+                           @"/etc/apt"];
+    
+    for (int i = 0; i < pathArray.count; i++) {
+        if ([[NSFileManager defaultManager] fileExistsAtPath:pathArray[i]]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (BOOL)isJailBreakForOpenCydia {
+    
+    // 根据是否能打开cydia判断
+    if ([[UIApplication sharedApplication] canOpenURL:[NSURL URLWithString:@"cydia://"]]) {
+        return YES;
+    }
+    return NO;
+}
+
+- (BOOL)isJailBreakForAllApplicationsName {
+    
+    // 根据是否能获取所有应用的名称判断
+    if ([[NSFileManager defaultManager] fileExistsAtPath:@"User/Applications/"]) {
+        // NSArray *appList = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:@"User/Applications/" error:nil];
+        return YES;
+    }
+    return NO;
+}
+
+- (BOOL)isJailBreakForStat{
+    
+    // 根据使用stat方法来判断cydia是否存在来判断
+    struct stat stat_info;
+    
+    // check inject
+    int ret;
+    Dl_info dylib_info;
+    int (*func_stat)(const char*, struct stat*) = stat;
+    char *dylib_name = "/usr/lib/system/libsystem_kernel.dylib";
+    if ((ret = dladdr(func_stat, &dylib_info)) &&
+        strncmp(dylib_info.dli_fname, dylib_name, strlen(dylib_name))) {
+        if (0 == stat("/Applications/Cydia.app", &stat_info)) {
+            return YES;
+        }
+    }else{
+        return YES;
+    }
+    return NO;
+}
+
+- (BOOL)isJailBreakForENV
+{
+    // 根据读取的环境变量是否有值判断
+    // DYLD_INSERT_LIBRARIES环境变量在非越狱的设备上应该是空的，而越狱的设备基本上都会有Library/MobileSubstrate/MobileSubstrate.dylib
+
+    char *env = getenv("DYLD_INSERT_LIBRARIES");
+    if (env) {
+        return YES;
+    }
+    return NO;
+}
+
+@end
+
+
 
