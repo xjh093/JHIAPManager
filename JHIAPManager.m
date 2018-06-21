@@ -33,10 +33,6 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
 
 @implementation JHIAPManager
 
-+ (void)load{
-    [JHIAPManager iapManager];
-}
-
 + (instancetype)iapManager{
     static JHIAPManager *iapManager = nil;
     static dispatch_once_t onceToken;
