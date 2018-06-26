@@ -251,7 +251,7 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
     int (*func_stat)(const char*, struct stat*) = stat;
     char *dylib_name = "/usr/lib/system/libsystem_kernel.dylib";
     if ((ret = dladdr(func_stat, &dylib_info)) &&
-        strncmp(dylib_info.dli_fname, dylib_name, strlen(dylib_name))) {
+        !strncmp(dylib_info.dli_fname, dylib_name, strlen(dylib_name))) {
         if (0 == stat("/Applications/Cydia.app", &stat_info)) {
             return YES;
         }
