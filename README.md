@@ -1,7 +1,11 @@
 # JHIAPManager
-关于内购&amp; about In-App Purchase
+In-App Purchase
+- 关于内购
 
-### Appdelegate.m
+---
+
+# Usage
+Appdelegate.m
 ```
  - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
  
