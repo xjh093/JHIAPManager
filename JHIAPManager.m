@@ -5,6 +5,27 @@
 //  Created by HaoCold on 2017/9/15.
 //  Copyright © 2017年 HaoCold. All rights reserved.
 //
+//  MIT License
+//
+//  Copyright (c) 2017 xjh093
+//
+//  Permission is hereby granted, free of charge, to any person obtaining a copy
+//  of this software and associated documentation files (the "Software"), to deal
+//  in the Software without restriction, including without limitation the rights
+//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the Software is
+//  furnished to do so, subject to the following conditions:
+//
+//  The above copyright notice and this permission notice shall be included in all
+//  copies or substantial portions of the Software.
+//
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+//  SOFTWARE.
 
 #import "JHIAPManager.h"
 #import <dlfcn.h>
@@ -24,14 +45,23 @@ NSInteger const JHIAPmanagerErrorCodeIsJailBreak = -4;
 
 typedef void(^jhPaySuccessBlock)(SKPaymentTransaction *transaction);
 typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *error);
+typedef void(^jhRestoreSuccessBlock)(SKPaymentQueue *transaction);
+typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error);
 
 @interface JHIAPManager()<SKPaymentTransactionObserver,SKProductsRequestDelegate>
 @property (nonatomic,   copy) jhPaySuccessBlock paySuccessBlock;
 @property (nonatomic,   copy) jhPayFailureBlock payFailureBlock;
 @property (nonatomic,   copy) NSString *applicationUsername;
+@property (nonatomic,   copy) jhRestoreSuccessBlock restoreSuccessBlock;
+@property (nonatomic,   copy) jhRestoreFailureBlock restoreFailureBlock;
+@property (nonatomic,  assign) BOOL  restore;
 @end
 
 @implementation JHIAPManager
+
++ (void)load{
+    [JHIAPManager iapManager];
+}
 
 + (instancetype)iapManager{
     static JHIAPManager *iapManager = nil;
@@ -76,11 +106,13 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
         return;
     }
     
+#if 0
     if ([self jh_isJailBreak]) {
         NSError *error = [NSError errorWithDomain:JHIAPManagerErrorDomain code:JHIAPmanagerErrorCodeIsJailBreak userInfo:@{NSLocalizedDescriptionKey:@"this device is jailBreak, it's unsafe to make payments"}];
         failure(nil,error);
         return;
     }
+#endif
     
     _applicationUsername = applicationUsername;
     _paySuccessBlock = success;
@@ -102,6 +134,21 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
 
 - (void)jh_finishTransaction:(SKPaymentTransaction *)transaction{
     [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
+}
+
+- (void)jh_restorePayment:(nullable NSString *)applicationUsername
+                  success:(void (^)(SKPaymentQueue *paymentQueue))success
+                  failure:(void (^)(SKPaymentQueue *paymentQueue, NSError *error))failure
+{
+    _restoreSuccessBlock = success;
+    _restoreFailureBlock = failure;
+    _restore = YES;
+    
+    if (applicationUsername) {
+        [[SKPaymentQueue defaultQueue] restoreCompletedTransactionsWithApplicationUsername:applicationUsername];
+    }else{
+        [[SKPaymentQueue defaultQueue] restoreCompletedTransactions];
+    }
 }
 
 #pragma mark SKProductsRequestDelegate
@@ -149,12 +196,34 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
                 [self jhPaymentFailure:transaction];
                 break;
             case SKPaymentTransactionStateRestored://已经购买过该商品
-                [self jhPaymentRestore:transaction];
+                if (!_restore) {
+                    [self jhPaymentRestore:transaction];
+                }
                 break;
             default:
                 break;
         }
     }
+}
+
+- (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue *)queue{
+    
+    for (SKPaymentTransaction *transaction in queue.transactions)
+    {
+        [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
+    }
+    
+    if (_restoreSuccessBlock) {
+        _restoreSuccessBlock(queue);
+    }
+    _restore = NO;
+}
+
+- (void)paymentQueue:(SKPaymentQueue *)queue restoreCompletedTransactionsFailedWithError:(NSError *)error{
+    if (_restoreFailureBlock) {
+        _restoreFailureBlock(queue,error);
+    }
+    _restore = NO;
 }
 
 #pragma mark --- transactionState handle
@@ -175,7 +244,7 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
 }
 
 - (void)jhPaymentRestore:(SKPaymentTransaction *)transaction {
-    [[SKPaymentQueue defaultQueue] restoreCompletedTransactions];
+    [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
 }
 
 @end
@@ -242,16 +311,18 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
 
 - (BOOL)isJailBreakForStat{
     
-    // 根据使用stat方法来判断cydia是否存在来判断
-    struct stat stat_info;
-    
     // check inject
     int ret;
     Dl_info dylib_info;
     int (*func_stat)(const char*, struct stat*) = stat;
     char *dylib_name = "/usr/lib/system/libsystem_kernel.dylib";
     if ((ret = dladdr(func_stat, &dylib_info)) &&
+        
+        // 看看stat是不是出自系统库
         !strncmp(dylib_info.dli_fname, dylib_name, strlen(dylib_name))) {
+        
+        // 根据使用stat方法来判断cydia是否存在来判断
+        struct stat stat_info;
         if (0 == stat("/Applications/Cydia.app", &stat_info)) {
             return YES;
         }
@@ -274,6 +345,4 @@ typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *err
 }
 
 @end
-
-
 
