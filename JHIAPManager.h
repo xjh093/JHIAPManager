@@ -90,7 +90,7 @@
 
 ///恢复购买
 - (void)jh_restorePayment:(nullable NSString *)applicationUsername
-                     success:(void (^)(SKPaymentQueue *paymentQueue))success
+                     success:(void (^)(SKPaymentTransaction *paymentQueue))success
                      failure:(void (^)(SKPaymentQueue *paymentQueue, NSError *error))failure;
 
 @end
