@@ -54,7 +54,6 @@ typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error
 @property (nonatomic,   copy) NSString *applicationUsername;
 @property (nonatomic,   copy) jhRestoreSuccessBlock restoreSuccessBlock;
 @property (nonatomic,   copy) jhRestoreFailureBlock restoreFailureBlock;
-@property (nonatomic,  assign) BOOL  restore;
 @end
 
 @implementation JHIAPManager
@@ -142,7 +141,6 @@ typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error
 {
     _restoreSuccessBlock = success;
     _restoreFailureBlock = failure;
-    _restore = YES;
     
     if (applicationUsername) {
         [[SKPaymentQueue defaultQueue] restoreCompletedTransactionsWithApplicationUsername:applicationUsername];
@@ -196,9 +194,7 @@ typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error
                 [self jhPaymentFailure:transaction];
                 break;
             case SKPaymentTransactionStateRestored://已经购买过该商品
-                if (!_restore) {
-                    [self jhPaymentRestore:transaction];
-                }
+                [self jhPaymentRestore:transaction];
                 break;
             default:
                 break;
@@ -210,7 +206,6 @@ typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error
     if (_restoreFailureBlock) {
         _restoreFailureBlock(queue,error);
     }
-    _restore = NO;
 }
 
 #pragma mark --- transactionState handle
