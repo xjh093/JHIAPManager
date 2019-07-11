@@ -45,7 +45,7 @@ NSInteger const JHIAPmanagerErrorCodeIsJailBreak = -4;
 
 typedef void(^jhPaySuccessBlock)(SKPaymentTransaction *transaction);
 typedef void(^jhPayFailureBlock)(SKPaymentTransaction *transaction, NSError *error);
-typedef void(^jhRestoreSuccessBlock)(SKPaymentQueue *transaction);
+typedef void(^jhRestoreSuccessBlock)(SKPaymentTransaction *transaction);
 typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error);
 
 @interface JHIAPManager()<SKPaymentTransactionObserver,SKProductsRequestDelegate>
@@ -137,7 +137,7 @@ typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error
 }
 
 - (void)jh_restorePayment:(nullable NSString *)applicationUsername
-                  success:(void (^)(SKPaymentQueue *paymentQueue))success
+                  success:(void (^)(SKPaymentTransaction *paymentQueue))success
                   failure:(void (^)(SKPaymentQueue *paymentQueue, NSError *error))failure
 {
     _restoreSuccessBlock = success;
@@ -206,19 +206,6 @@ typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error
     }
 }
 
-- (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue *)queue{
-    
-    for (SKPaymentTransaction *transaction in queue.transactions)
-    {
-        [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
-    }
-    
-    if (_restoreSuccessBlock) {
-        _restoreSuccessBlock(queue);
-    }
-    _restore = NO;
-}
-
 - (void)paymentQueue:(SKPaymentQueue *)queue restoreCompletedTransactionsFailedWithError:(NSError *)error{
     if (_restoreFailureBlock) {
         _restoreFailureBlock(queue,error);
@@ -245,6 +232,9 @@ typedef void(^jhRestoreFailureBlock)(SKPaymentQueue *transaction, NSError *error
 
 - (void)jhPaymentRestore:(SKPaymentTransaction *)transaction {
     [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
+    if (_restoreSuccessBlock) {
+        _restoreSuccessBlock(transaction);
+    }
 }
 
 @end
